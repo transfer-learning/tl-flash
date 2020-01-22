@@ -1,4 +1,3 @@
-use std::fmt::Error;
 use simple_error::SimpleError;
 
 #[derive(Copy, Clone)]
@@ -75,7 +74,7 @@ impl IntelHex {
             return Err(SimpleError::new("data exceed max length (255 bytes)"))
         }
         let mut hex = IntelHex::new(CommandType::Data);
-        hex.data.append(data.into_vec().as_mut());
+        hex.data.append(data.to_vec().as_mut());
         hex.address = base_addr;
         return Ok(hex);
     }
