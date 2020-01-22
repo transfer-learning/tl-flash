@@ -1,3 +1,6 @@
+use std::fmt::Error;
+use simple_error::SimpleError;
+
 #[derive(Copy, Clone)]
 pub enum CommandType {
     Data,
@@ -61,6 +64,20 @@ impl IntelHex {
         hex.push_byte(((addr >> 8) & 0xFF) as u8);
         hex.push_byte((addr & 0xFF) as u8);
         hex
+    }
+
+    pub fn eof() -> IntelHex {
+        IntelHex::new(CommandType::EOF)
+    }
+
+    pub fn data_command(base_addr: u16, data: &[u8]) -> Result<IntelHex, SimpleError> {
+        if data.len() > 0xFF {
+            return Err(SimpleError::new("data exceed max length (255 bytes)"))
+        }
+        let mut hex = IntelHex::new(CommandType::Data);
+        hex.data.append(data.into_vec().as_mut());
+        hex.address = base_addr;
+        return Ok(hex);
     }
 
     pub fn push_byte(&mut self, byte: u8) {

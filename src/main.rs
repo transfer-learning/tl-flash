@@ -6,6 +6,8 @@ use std::fs::File;
 use std::io;
 use std::num::ParseIntError;
 use serialport::{SerialPortSettings, DataBits, FlowControl, Parity, StopBits, ClearBuffer};
+use math::round::ceil;
+use std::io::Read;
 
 mod ihex;
 
@@ -38,7 +40,7 @@ fn main() -> io::Result<()> {
     let args = Arguments::from_args();
     debug!("Parsed {:?}", args);
 
-    let target_file = File::open(args.file)?;
+    let mut target_file = File::open(args.file)?;
     debug!("file opened: {:?}", target_file);
     let meta = target_file.metadata()?;
     debug!("File size: {} bytes", meta.len());
@@ -68,7 +70,14 @@ fn main() -> io::Result<()> {
     if port.clear(ClearBuffer::All).is_ok() {
         debug!("Serial Buffer Cleared")
     }
-    let hex = ihex::IntelHex::extended_address_command(0xb0ba);
+
+    let mut buffer: [u8; 255] = [0; 255];
+    let mut current_base: u32 = 0;
+    let mut file_offset: u32 = args.base;
+    loop {
+        let size = target_file.read(&buffer)?;
+        let hex = ihex::IntelHex::data_command(file_offset);
+    }
 
     Ok(())
 }
