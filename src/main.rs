@@ -12,6 +12,8 @@ use std::process::exit;
 use termion::color;
 use crate::ihex::IntelHex;
 use std::time::Duration;
+use indicatif::{HumanBytes, MultiProgress, ProgressBar, ProgressStyle, ProgressDrawTarget};
+use std::thread::sleep;
 
 mod ihex;
 
@@ -38,6 +40,9 @@ struct Arguments {
 
     #[structopt(long, short = "dry")]
     dry: bool,
+
+    #[structopt(short, parse(from_occurrences))]
+    verbose: usize,
 }
 
 fn main() -> io::Result<()> {
@@ -50,11 +55,21 @@ fn main() -> io::Result<()> {
     let mut target_file = File::open(args.file)?;
     debug!("file opened: {:?}", target_file);
     let meta = target_file.metadata()?;
-    debug!("File size: {} bytes", meta.len());
+    debug!("File size: {}", HumanBytes(meta.len()));
 
+    let mut file_size_status = ProgressBar::new(0);
+    file_size_status.set_draw_target(ProgressDrawTarget::stdout());
+    let mut convert_status = ProgressBar::new(meta.len());
+    convert_status.set_draw_target(ProgressDrawTarget::stdout());
+    file_size_status.set_style(ProgressStyle::default_bar().template("{msg}"));
+    file_size_status.set_message(format!("Input File Size {}", HumanBytes(meta.len())).as_str());
+    convert_status.set_style(ProgressStyle::default_bar().template("{prefix} [{bar}] {msg} {bytes}/{total_bytes}"));
+    convert_status.set_message("Covert Binary to IntelHex");
 
     let mut commands: Vec<IntelHex> = Vec::new();
-
+//    convert_status.set_length(meta.len());
+//    convert_status.set_style(ProgressStyle::default_bar());
+//    convert_status.set_message("Converting Binary to IntelHex");
     let mut buffer: [u8; 255] = [0; 255];
     let mut current_base: u32 = args.base & 0xFF00;
     let mut file_offset: u32 = args.base;
@@ -63,6 +78,7 @@ fn main() -> io::Result<()> {
         ::extended_address_command((current_base >> 16) as u16));
     loop {
         let size = target_file.read(&mut buffer)?;
+        convert_status.inc(size as u64);
         if size == 0 {
             break;
         }
@@ -83,13 +99,20 @@ fn main() -> io::Result<()> {
         file_offset += size as u32;
     }
     commands.push(ihex::IntelHex::eof());
+    convert_status.finish_with_message(&format!("{} Intel Hex Commands", commands.len()));
+    convert_status.tick();
 
-    println!("Commands:");
-    for cmd in &commands {
-        println!("{}", cmd.to_string());
+    if args.verbose >= 2 {
+        println!("Commands:");
+        for cmd in &commands {
+            println!("{}", cmd.to_string());
+        }
     }
 
     if !args.dry {
+        let download_bar = ProgressBar::new(commands.len() as u64);
+        download_bar.set_style(ProgressStyle::default_bar().template("{prefix} [{bar}] {msg} {pos}/{len}[{percent}%] eta[{eta_precise}]"));
+        download_bar.set_message("Sending Intel Hex Commands");
         let port_name: String = if args.serial_port.is_some() {
             args.serial_port.unwrap()
         } else {
@@ -117,21 +140,32 @@ fn main() -> io::Result<()> {
         if port.clear(ClearBuffer::All).is_ok() {
             debug!("Serial Buffer Cleared")
         }
-        let mut buffer= [0 as u8; 5];
-        for cmd in commands {
-            let len = port.write(cmd.to_string().as_bytes())?;
-            assert_eq!(len, cmd.to_string().len());
-            port.flush()?;
-            let mut len;
+        let mut buffer = [0 as u8; 5];
+        for (i, cmd) in commands.iter().enumerate() {
+            download_bar.set_position(i as u64);
             loop {
-                len = port.read(&mut buffer)?;
-                if len > 0{
+                let len = port.write(cmd.to_string().as_bytes())?;
+                assert_eq!(len, cmd.to_string().len(), "command potentially contains non-ascii");
+                port.flush()?;
+                let mut len;
+                loop {
+                    len = port.read(&mut buffer)?;
+                    if len > 0 {
+                        break;
+                    }
+                }
+                if buffer[0] as char == cmd.command_type().ack_char() {
                     break;
                 }
+                println!("{} NACK Recived: {}, retrying...{}",
+                         color::Fg(color::Red),
+                         buffer[0] as char,
+                         color::Fg(color::Reset)
+                );
+                port.clear(ClearBuffer::All)?;
             }
-            println!("{}", String::from_utf8_lossy(&buffer[0..len]))
         }
+        download_bar.finish_with_message("Downloaded");
     }
-
     Ok(())
 }

@@ -7,6 +7,16 @@ pub enum CommandType {
     ExtendedAddress,
 }
 
+impl CommandType {
+    pub fn ack_char(&self) -> char {
+        match self {
+            CommandType::Data => 'K',
+            CommandType::EOF => 'R',
+            CommandType::ExtendedAddress => 'S',
+        }
+    }
+}
+
 impl Into<u8> for CommandType {
     fn into(self) -> u8 {
         match self {
@@ -67,6 +77,10 @@ impl IntelHex {
 
     pub fn eof() -> IntelHex {
         IntelHex::new(CommandType::EOF)
+    }
+
+    pub fn command_type(&self) -> CommandType {
+        self.command_type
     }
 
     pub fn data_command(base_addr: u16, data: &[u8]) -> Result<IntelHex, SimpleError> {
