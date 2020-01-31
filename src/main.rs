@@ -12,8 +12,7 @@ use std::process::exit;
 use termion::color;
 use crate::ihex::IntelHex;
 use std::time::Duration;
-use indicatif::{HumanBytes, MultiProgress, ProgressBar, ProgressStyle, ProgressDrawTarget};
-use std::thread::sleep;
+use indicatif::{HumanBytes, ProgressBar, ProgressStyle, ProgressDrawTarget};
 
 mod ihex;
 
@@ -57,9 +56,9 @@ fn main() -> io::Result<()> {
     let meta = target_file.metadata()?;
     debug!("File size: {}", HumanBytes(meta.len()));
 
-    let mut file_size_status = ProgressBar::new(0);
+    let file_size_status = ProgressBar::new(0);
     file_size_status.set_draw_target(ProgressDrawTarget::stdout());
-    let mut convert_status = ProgressBar::new(meta.len());
+    let convert_status = ProgressBar::new(meta.len());
     convert_status.set_draw_target(ProgressDrawTarget::stdout());
     file_size_status.set_style(ProgressStyle::default_bar().template("{msg}"));
     file_size_status.set_message(format!("Input File Size {}", HumanBytes(meta.len())).as_str());
@@ -71,7 +70,7 @@ fn main() -> io::Result<()> {
 //    convert_status.set_style(ProgressStyle::default_bar());
 //    convert_status.set_message("Converting Binary to IntelHex");
     let mut buffer: [u8; 255] = [0; 255];
-    let mut current_base: u32 = args.base & 0xFF00;
+    let mut current_base: u32 = args.base & 0xFFFF_0000;
     let mut file_offset: u32 = args.base;
     commands.push(
         ihex::IntelHex
@@ -82,17 +81,17 @@ fn main() -> io::Result<()> {
         if size == 0 {
             break;
         }
-        if file_offset & 0xFF00 != current_base {
+        if file_offset & 0xFFFF0000 != current_base {
             commands.push(
                 ihex::IntelHex::extended_address_command(
                     (file_offset >> 16) as u16
                 )
             );
-            current_base = file_offset & 0xFF00;
+            current_base = file_offset & 0xFFFF0000;
         }
         commands.push(
             ihex::IntelHex::data_command(
-                (file_offset & 0xFF) as u16,
+                (file_offset & 0xFFFF) as u16,
                 &buffer[0..size],
             ).unwrap()
         );
