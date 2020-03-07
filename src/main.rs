@@ -13,6 +13,7 @@ use termion::color;
 use crate::ihex::IntelHex;
 use std::time::Duration;
 use indicatif::{HumanBytes, ProgressBar, ProgressStyle, ProgressDrawTarget};
+use std::cmp::min;
 
 mod ihex;
 
@@ -77,10 +78,27 @@ fn main() -> io::Result<()> {
         ::extended_address_command((current_base >> 16) as u16));
     loop {
         let size = target_file.read(&mut buffer)?;
+        let mut sent = 0;
         convert_status.inc(size as u64);
         if size == 0 {
             break;
         }
+        let sendable_without_change_of_addr = ((current_base | 0x0000_FFFF) - file_offset + 1) as usize;
+        let first_batch = min(sendable_without_change_of_addr, size);
+        if first_batch > 0 {
+            commands.push(
+                ihex::IntelHex::data_command(
+                    (file_offset & 0xFFFF) as u16,
+                    &buffer[0..first_batch],
+                ).unwrap()
+            );
+            file_offset += first_batch as u32;
+            sent = first_batch;
+        }
+        if size - sent == 0 {
+            continue;
+        }
+
         if file_offset & 0xFFFF0000 != current_base {
             commands.push(
                 ihex::IntelHex::extended_address_command(
@@ -92,7 +110,7 @@ fn main() -> io::Result<()> {
         commands.push(
             ihex::IntelHex::data_command(
                 (file_offset & 0xFFFF) as u16,
-                &buffer[0..size],
+                &buffer[sent..size],
             ).unwrap()
         );
         file_offset += size as u32;
