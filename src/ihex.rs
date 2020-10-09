@@ -53,6 +53,7 @@ impl ToString for IntelHex {
         }
 
         str.push_str(&format!("{:02X}", self.compute_checksum()));
+        str.push_str("\n");
 
         return str;
     }
