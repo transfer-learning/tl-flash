@@ -142,7 +142,6 @@ fn main() -> io::Result<()> {
             }
         };
         debug!("Selected Serial Port: {}", port_name);
-        println!("Timeout 3s");
 
         let serial_settings = SerialPortSettings {
             baud_rate: 115200,
@@ -154,9 +153,9 @@ fn main() -> io::Result<()> {
         };
         let mut port =
             serialport::open_with_settings(&port_name, &serial_settings)?;
-        println!("Serial Port Opened");
+        debug!("Serial Port Opened");
         if port.clear(ClearBuffer::All).is_ok() {
-            println!("Serial Buffer Cleared")
+            debug!("Serial Buffer Cleared")
         }
         let mut buffer = [0 as u8; 5];
         for (i, cmd) in commands.iter().enumerate() {
@@ -165,9 +164,9 @@ fn main() -> io::Result<()> {
                 let len = port.write(cmd.to_string().as_bytes())?;
                 assert_eq!(len, cmd.to_string().len(), "command potentially contains non-ascii");
                 port.flush()?;
-                let mut len: usize;
+                let mut len;
                 loop {
-                    len = port.read(&mut buffer).expect("EHHHH");
+                    len = port.read(&mut buffer)?;
                     if len > 0 {
                         break;
                     }
