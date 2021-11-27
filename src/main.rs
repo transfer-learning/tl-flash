@@ -9,7 +9,6 @@ use std::num::ParseIntError;
 use serialport::{SerialPortSettings, DataBits, FlowControl, Parity, StopBits, ClearBuffer};
 use std::io::Read;
 use std::process::exit;
-use termion::color;
 use crate::ihex::IntelHex;
 use std::time::Duration;
 use indicatif::{HumanBytes, ProgressBar, ProgressStyle, ProgressDrawTarget};
@@ -137,7 +136,7 @@ fn main() -> io::Result<()> {
             if !ports.is_empty() {
                 ports.get(0).unwrap().port_name.clone()
             } else {
-                eprintln!("{}No serial port found{}", color::Fg(color::Red), color::Fg(color::Reset));
+                eprintln!("No serial port found");
                 exit(1);
             }
         };
@@ -149,7 +148,7 @@ fn main() -> io::Result<()> {
             flow_control: FlowControl::None,
             parity: Parity::None,
             stop_bits: StopBits::One,
-            timeout: Duration::from_millis(3000),
+            timeout: Duration::from_millis(100),
         };
         let mut port =
             serialport::open_with_settings(&port_name, &serial_settings)?;
@@ -174,10 +173,8 @@ fn main() -> io::Result<()> {
                 if buffer[0] as char == cmd.command_type().ack_char() {
                     break;
                 }
-                println!("{} NACK Recived: {}, retrying...{}",
-                         color::Fg(color::Red),
+                println!("NACK Recived: {}, retrying...",
                          buffer[0] as char,
-                         color::Fg(color::Reset)
                 );
                 port.clear(ClearBuffer::All)?;
             }
